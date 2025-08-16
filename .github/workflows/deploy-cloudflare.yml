@@ -1,0 +1,437 @@
+name: Deploy to Cloudflare Pages and Deno Deploy
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'app/**'
+      - 'public/**'
+      - 'functions/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'deno.json'
+      - 'vite.config.ts'
+      - 'tsconfig.json'
+      - 'tailwind.config.*'
+      - '.github/workflows/deploy-cloudflare.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  deployments: write
+  pull-requests: write
+
+jobs:
+  deploy-deno:
+    runs-on: ubuntu-latest
+    name: Deploy to Deno Deploy
+    outputs:
+      url: ${{ steps.deno-deploy.outputs.url }}
+      deno_url: ${{ steps.deno-status.outputs.deno_url }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v2.x
+
+      - name: Check Deno version
+        run: |
+          echo "📋 Deno version information:"
+          deno --version
+
+      - name: Verify Deno functions
+        run: |
+          echo "🔍 Checking Deno functions..."
+          deno check functions/*.ts
+          echo "✅ All functions type-checked successfully"
+
+      - name: Test Deno functions
+        run: |
+          echo "🧪 Testing function imports..."
+          deno run --allow-net --allow-env --allow-read functions/router.ts &
+          SERVER_PID=$!
+          sleep 3
+
+          # Test if server is responding
+          if curl -f http://localhost:8000/ > /dev/null 2>&1; then
+            echo "✅ Router is responding correctly"
+          else
+            echo "❌ Router test failed"
+            exit 1
+          fi
+
+          # Clean up
+          kill $SERVER_PID || true
+          wait $SERVER_PID 2>/dev/null || true
+
+      - name: Generate Deno Deploy project name
+        id: deno_project_name
+        run: |
+          # Always generate a random project name
+          # Generate random alphanumeric string (8 chars)
+          RANDOM_ID=$(openssl rand -hex 4)
+          
+          # Create unique project name with format: remix-deno-{random}
+          PROJECT_NAME="remix-deno-${RANDOM_ID}"
+          
+          # Ensure project name is valid (lowercase, alphanumeric with hyphens, max 63 chars)
+          PROJECT_NAME=$(echo "$PROJECT_NAME" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9-]+/-/g' | sed -E 's/^-+|-+$//g' | cut -c1-63)
+
+          echo "🎲 Random ID: '$RANDOM_ID'"
+          echo "🚀 Generated unique project name: '$PROJECT_NAME'"
+          echo "deno_project_name=$PROJECT_NAME" >> $GITHUB_OUTPUT
+
+      - name: Create Deno Deploy project if not exists
+        run: |
+          if [ -z "${{ secrets.DENO_DEPLOY_TOKEN }}" ]; then
+            echo "❌ DENO_DEPLOY_TOKEN not set, cannot proceed with deployment"
+            echo "💡 To enable Deno Deploy:"
+            echo "   1. Generate token at: https://dash.deno.com/account/access-tokens"
+            echo "   2. Add DENO_DEPLOY_TOKEN to repository secrets"
+            exit 1
+          fi
+          
+          PROJECT_NAME="${{ steps.deno_project_name.outputs.deno_project_name }}"
+          echo "🔍 Checking Deno Deploy project: ${PROJECT_NAME}"
+          
+          # Install latest deployctl using JSR
+          deno install -A --global jsr:@deno/deployctl
+          
+          # Set non-interactive mode to prevent browser authorization prompts
+          export DENO_DEPLOY_TOKEN="${{ secrets.DENO_DEPLOY_TOKEN }}"
+          
+          # First, try to list projects to verify token works
+          echo "🔐 Verifying token access..."
+          if ! deployctl projects list --token="${DENO_DEPLOY_TOKEN}" >/dev/null 2>&1; then
+            echo "❌ Token verification failed. Please check DENO_DEPLOY_TOKEN secret."
+            echo "💡 Generate a new token at: https://dash.deno.com/account/access-tokens"
+            exit 1
+          fi
+          echo "✅ Token verified successfully"
+          
+          # Check if project already exists
+          if deployctl projects list --token="${DENO_DEPLOY_TOKEN}" | grep -q "^${PROJECT_NAME}$"; then
+            echo "✅ Project '${PROJECT_NAME}' already exists"
+          else
+            echo "🚀 Creating new project: ${PROJECT_NAME}"
+            if deployctl projects create "${PROJECT_NAME}" --token="${DENO_DEPLOY_TOKEN}"; then
+              echo "✅ Project created successfully"
+            else
+              echo "❌ Failed to create project. Check token permissions."
+              exit 1
+            fi
+          fi
+        env:
+          DENO_DEPLOY_TOKEN: ${{ secrets.DENO_DEPLOY_TOKEN }}
+
+      - name: Deploy to Deno Deploy
+        id: deno-deploy
+        run: |
+          PROJECT_NAME="${{ steps.deno_project_name.outputs.deno_project_name }}"
+          echo "🚀 Deploying to Deno Deploy project: ${PROJECT_NAME}"
+          
+          # Deploy using deployctl CLI
+          DEPLOY_OUTPUT=$(deployctl deploy --project="${PROJECT_NAME}" --token="${{ secrets.DENO_DEPLOY_TOKEN }}" --prod functions/router.ts 2>&1)
+          DEPLOY_EXIT_CODE=$?
+          
+          echo "$DEPLOY_OUTPUT"
+          
+          if [ $DEPLOY_EXIT_CODE -ne 0 ]; then
+            echo "❌ Deployment failed with exit code: $DEPLOY_EXIT_CODE"
+            exit 1
+          fi
+          
+          # Extract deployment URL from output - look for the production URL
+          DEPLOY_URL=$(echo "$DEPLOY_OUTPUT" | grep -oE 'https://[^[:space:]]+\.deno\.dev[^[:space:]]*' | head -1)
+          
+          # If no URL found, construct it from project name
+          if [ -z "$DEPLOY_URL" ]; then
+            echo "⚠️ No URL found in output, constructing from project name"
+            DEPLOY_URL="https://${PROJECT_NAME}.deno.dev"
+          fi
+          
+          echo "✅ Deployment successful"
+          echo "📍 Deployment URL: $DEPLOY_URL"
+          echo "url=$DEPLOY_URL" >> $GITHUB_OUTPUT
+          
+          # Verify the deployment is accessible
+          echo "🔍 Verifying deployment is accessible..."
+          sleep 5  # Give deployment a moment to propagate
+          if curl -f "$DEPLOY_URL" > /dev/null 2>&1; then
+            echo "✅ Deployment is accessible at $DEPLOY_URL"
+          else
+            echo "⚠️ Deployment may still be propagating"
+          fi
+        env:
+          DENO_DEPLOY_TOKEN: ${{ secrets.DENO_DEPLOY_TOKEN }}
+
+      - name: Log Deno Deploy Status
+        id: deno-status
+        run: |
+          DENO_URL="${{ steps.deno-deploy.outputs.url }}"
+          if [ -n "$DENO_URL" ]; then
+            echo "✅ Deno Deploy successful: $DENO_URL"
+            echo "deno_url=$DENO_URL" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Deno Deploy failed - no URL returned"
+            echo "💡 Check deployment logs for issues"
+            exit 1
+          fi
+
+  deploy-cloudflare:
+    runs-on: ubuntu-latest
+    name: Deploy to Cloudflare Pages
+    needs: deploy-deno
+    outputs:
+      url: ${{ steps.cloudflare-deploy.outputs.url }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Remix SPA
+        run: |
+          DENO_URL="${{ needs.deploy-deno.outputs.url }}"
+          echo "🔗 Received Deno Deploy URL: ${DENO_URL}"
+          
+          # Verify we have a valid URL - fail if not
+          if [ -z "${DENO_URL}" ] || [ "${DENO_URL}" = "" ]; then
+            echo "❌ ERROR: No Deno Deploy URL received from previous job"
+            echo "❌ The Deno deployment must complete successfully before building the Remix SPA"
+            echo "💡 Check the 'deploy-deno' job logs for deployment issues"
+            exit 1
+          fi
+          
+          # Export the environment variable for Vite
+          export VITE_API_BASE_URL="${DENO_URL}"
+          
+          echo "📦 Building with environment:"
+          echo "   VITE_API_BASE_URL=${VITE_API_BASE_URL}"
+          
+          # Create .env.production file for Vite
+          echo "VITE_API_BASE_URL=${VITE_API_BASE_URL}" > .env.production
+          echo "📝 Created .env.production with API URL"
+          cat .env.production
+          
+          # Build the application
+          echo "🔨 Starting build..."
+          VITE_API_BASE_URL="${VITE_API_BASE_URL}" pnpm build
+          
+          # Verify the build output
+          echo "🔍 Verifying build output..."
+          echo "📂 Checking for localhost references in build:"
+          
+          # Check JavaScript files for localhost references
+          if find build/client -name "*.js" -type f -exec grep -l "localhost:8000" {} \; 2>/dev/null | head -5; then
+            echo "⚠️ Warning: Found localhost:8000 references in build files"
+            echo "📝 Sample of files with localhost:"
+            find build/client -name "*.js" -type f -exec grep -l "localhost:8000" {} \; 2>/dev/null | head -3
+          else
+            echo "✅ No localhost:8000 references found in JavaScript files"
+          fi
+          
+          # Check if the correct URL is in the build
+          if find build/client -name "*.js" -type f -exec grep -l "${DENO_URL}" {} \; 2>/dev/null | head -1 > /dev/null; then
+            echo "✅ Deployed Deno URL (${DENO_URL}) found in build files"
+          else
+            echo "⚠️ Warning: Deployed URL not found in build files"
+          fi
+          
+          echo "✅ Build completed"
+
+      - name: Ensure SPA fallback (_redirects)
+        run: |
+          if [ -f public/_redirects ]; then
+            mkdir -p build/client
+            cp public/_redirects build/client/_redirects
+          fi
+
+      - name: Compute Cloudflare project slug
+        run: |
+          BASE_NAME="${{ github.event.repository.name }}"
+          # lowercase, replace non [a-z0-9-] with '-', trim leading/trailing '-', and cap length to 63
+          SLUG=$(echo "$BASE_NAME" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9-]+/-/g' | sed -E 's/^-+|-+$//g' | cut -c1-63)
+          if [ -z "$SLUG" ]; then
+            SLUG="site-${GITHUB_RUN_ID}"
+          fi
+          echo "📝 Repository name: $BASE_NAME"
+          echo "📝 Generated project slug: $SLUG"
+          echo "PROJECT_SLUG=$SLUG" >> "$GITHUB_ENV"
+
+      - name: Ensure Cloudflare Pages project exists (wrangler)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CI: true
+        run: |
+          set -e
+          echo "Wrangler version:"; pnpm dlx wrangler --version
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo "CLOUDFLARE_ACCOUNT_ID is empty"; exit 1; }
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo "CLOUDFLARE_API_TOKEN is empty"; exit 1; }
+
+          echo "🔍 Checking for existing project: ${PROJECT_SLUG}"
+          
+          # List all projects to verify project existence more reliably
+          echo "📋 Listing all Cloudflare Pages projects..."
+          PROJECT_LIST=$(pnpm dlx wrangler pages project list 2>&1) || {
+            echo "❌ Failed to list projects. Check API token permissions."
+            exit 1
+          }
+          
+          echo "$PROJECT_LIST"
+          
+          # Check if project exists in the list
+          if echo "$PROJECT_LIST" | grep -q "│ $PROJECT_SLUG "; then
+            echo "✅ Project '${PROJECT_SLUG}' already exists - skipping creation"
+          else
+            echo "🚀 Creating new project: ${PROJECT_SLUG}"
+            CREATE_OUTPUT=$(pnpm dlx wrangler pages project create "$PROJECT_SLUG" --production-branch=main 2>&1)
+            CREATE_EXIT_CODE=$?
+            
+            echo "$CREATE_OUTPUT"
+            
+            # Handle the case where project already exists (race condition or API inconsistency)
+            if [ $CREATE_EXIT_CODE -ne 0 ]; then
+              if echo "$CREATE_OUTPUT" | grep -qi "already exists\|name already exists"; then
+                echo "✅ Project already exists (detected during creation) - continuing"
+              else
+                echo "❌ Failed to create project. Check API token permissions (Account: Cloudflare Pages: Read, Edit) and Account ID."
+                exit 1
+              fi
+            else
+              echo "✅ Project created successfully"
+            fi
+          fi
+
+      - name: Deploy to Cloudflare Pages (wrangler v3 deploy)
+        id: cloudflare-deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -e
+          echo "Wrangler version:"; pnpm dlx wrangler --version
+          echo "Deploying project '${PROJECT_SLUG}' from directory 'build/client'"
+          DEPLOY_OUT=$(pnpm dlx wrangler pages deploy build/client --project-name "${PROJECT_SLUG}" 2>&1) || {
+            echo "$DEPLOY_OUT"
+            exit 1
+          }
+          echo "$DEPLOY_OUT"
+          # Extract first pages.dev URL from output
+          URL=$(echo "$DEPLOY_OUT" | grep -Eo 'https?://[^ ]+\.pages\.dev[^ ]*' | head -n1)
+          if [ -n "$URL" ]; then
+            echo "url=$URL" >> "$GITHUB_OUTPUT"
+            echo "Deployment URL: $URL"
+          else
+            echo "Warning: No deployment URL found in wrangler output" >&2
+          fi
+
+      - name: Update Repository Homepage URL
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.ADMIN_TOKEN }}
+          script: |
+            const deploymentUrl = '${{ steps.cloudflare-deploy.outputs.url }}';
+            
+            if (deploymentUrl && deploymentUrl !== '') {
+              try {
+                await github.rest.repos.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  homepage: deploymentUrl,
+                  description: 'Remix SPA – Cloudflare Pages static deployment'
+                });
+                
+                console.log(`✅ Repository homepage updated to: ${deploymentUrl}`);
+              } catch (error) {
+                console.error('❌ Failed to update repository homepage:', error);
+                core.setFailed(`Failed to update homepage: ${error.message}`);
+              }
+            } else {
+              console.log('⚠️ No deployment URL found, skipping homepage update');
+            }
+
+      - name: Create GitHub deployment
+        if: always()
+        id: create-deployment
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.ADMIN_TOKEN }}
+          script: |
+            const deployment = await github.rest.repos.createDeployment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: context.sha,
+              environment: 'production',
+              description: 'Cloudflare Pages deployment',
+              auto_merge: false,
+              required_contexts: []
+            });
+            
+            return deployment.data.id;
+
+      - name: Update deployment status
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.ADMIN_TOKEN }}
+          script: |
+            const deploymentUrl = '${{ steps.cloudflare-deploy.outputs.url }}';
+            const state = '${{ job.status }}' === 'success' ? 'success' : 'failure';
+            const deploymentId = ${{ steps.create-deployment.outputs.result }};
+            
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: deploymentId,
+              state: state,
+              environment_url: deploymentUrl || '',
+              description: state === 'success' ? 'Deployment succeeded' : 'Deployment failed'
+            });
+
+      - name: Comment on PR with deployment URLs
+        if: github.event_name == 'pull_request' && success()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.ADMIN_TOKEN }}
+          script: |
+            const denoUrl = '${{ needs.deploy-deno.outputs.url }}';
+            const cloudflareUrl = '${{ steps.cloudflare-deploy.outputs.url }}';
+
+            let comment = '🚀 **Deployment Complete**\n\n';
+
+            if (cloudflareUrl && cloudflareUrl !== '') {
+              comment += `✅ **Cloudflare Pages**: ${cloudflareUrl}\n`;
+            }
+
+            if (denoUrl && denoUrl !== '') {
+              comment += `✅ **Deno Deploy Functions**: ${denoUrl}\n`;
+            }
+
+            comment += '\n📝 Your full-stack application is now live!';
+
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });

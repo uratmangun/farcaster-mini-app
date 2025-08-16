@@ -1,0 +1,38 @@
+{
+  "compilerOptions": {
+    "lib": ["deno.window"],
+    "strict": true
+  },
+  "lint": {
+    "rules": {
+      "tags": ["recommended"]
+    }
+  },
+  "fmt": {
+    "useTabs": false,
+    "lineWidth": 80,
+    "indentWidth": 2,
+    "semiColons": true,
+    "singleQuote": false,
+    "proseWrap": "preserve",
+    "include": ["functions/"]
+  },
+  "tasks": {
+    "dev": "deno run --allow-net --allow-env --allow-read --watch functions/router.ts",
+    "serve": "deno serve --allow-net --allow-env --allow-read functions/router.ts",
+    "dev:router": "deno run --allow-net --allow-env --allow-read --watch functions/router.ts",
+    "dev:hello": "deno run --allow-net --allow-env --watch functions/hello.ts",
+    "dev:time": "deno run --allow-net --allow-env --watch functions/time.ts",
+    "dev:api": "deno run --allow-net --allow-env --watch functions/api.ts",
+    "serve:router": "deno serve --allow-net --allow-env --allow-read functions/router.ts",
+    "serve:hello": "deno serve --allow-net --allow-env functions/hello.ts",
+    "serve:time": "deno serve --allow-net --allow-env functions/time.ts",
+    "serve:api": "deno serve --allow-net --allow-env functions/api.ts",
+    "lint": "deno lint functions/",
+    "fmt": "deno fmt functions/",
+    "check": "deno check functions/*.ts"
+  },
+  "imports": {
+    "@std/": "https://deno.land/std@0.208.0/"
+  }
+}

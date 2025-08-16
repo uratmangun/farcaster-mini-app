@@ -1,0 +1,19 @@
+# URA-19: deno-remix-template
+# 
+# Linear Issue: https://linear.app/uratmangun/issue/URA-19/deno-remix-template
+# Priority: High
+# Due Date: August 17, 2025
+# 
+# Description: Creating and setting up a Deno-based Remix template with proper 
+# configuration, development setup, and essential boilerplate code for developers.
+#
+# Commit message format:
+# <type>(<scope>): <description> (URA-19)
+#
+# Example:
+# feat(functions): add dynamic router system (URA-19)
+# docs(readme): update setup instructions (URA-19)
+# fix(config): resolve deno.json import paths (URA-19)
+#
+# Types: feat, fix, docs, style, refactor, test, chore
+# Always include (URA-19) at the end of the commit message
