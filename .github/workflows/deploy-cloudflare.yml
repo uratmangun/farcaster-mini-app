@@ -417,6 +417,60 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Generate Cloudflare Pages project name
+        id: cloudflare_project_name
+        run: |
+          # Extract repository name from GitHub context
+          REPO_NAME="${{ github.event.repository.name }}"
+          
+          # Truncate repo name to 26 chars to leave room for random ID
+          TRUNCATED_REPO=$(echo "$REPO_NAME" | cut -c1-26)
+          
+          # Generate random alphanumeric string (4 chars)
+          RANDOM_ID=$(openssl rand -hex 2)
+          
+          # Create unique project name with format: {truncated-repo-name}-{random}
+          PROJECT_NAME="${TRUNCATED_REPO}-${RANDOM_ID}"
+          
+          # Ensure project name is valid (lowercase, alphanumeric with hyphens, max 63 chars)
+          PROJECT_NAME=$(echo "$PROJECT_NAME" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9-]+/-/g')
+          # Remove any leading or trailing hyphens
+          PROJECT_NAME=$(echo "$PROJECT_NAME" | sed -E 's/^-+|-+$//g' | cut -c1-63)
+          
+          echo "📁 Repository name: '$REPO_NAME'"
+          echo "✂️  Truncated repo name: '$TRUNCATED_REPO'"
+          echo "🎲 Random ID: '$RANDOM_ID'"
+          echo "🚀 Generated project name: '$PROJECT_NAME' (${#PROJECT_NAME} chars)"
+          echo "cloudflare_project_name=$PROJECT_NAME" >> $GITHUB_OUTPUT
+          echo "PROJECT_SLUG=$PROJECT_NAME" >> "$GITHUB_ENV"
+
+      - name: Run project configuration scripts
+        run: |
+          PROJECT_NAME="${{ steps.cloudflare_project_name.outputs.cloudflare_project_name }}"
+          FARCASTER_DOMAIN="https://${PROJECT_NAME}.pages.dev"
+          
+          echo "🔧 Running configuration scripts with:"
+          echo "   PROJECT_NAME=${PROJECT_NAME}"
+          echo "   FARCASTER_DOMAIN=${FARCASTER_DOMAIN}"
+          
+          # Export environment variables for scripts
+          export FARCASTER_DOMAIN="${FARCASTER_DOMAIN}"
+          export PROJECT_NAME="${PROJECT_NAME}"
+                      
+          # Run generate-farcaster-auth.js
+          echo "🔐 Running generate-farcaster-auth.js..."
+          node scripts/generate-farcaster-auth.js
+          
+          # Run generate-flux-images.js
+          echo "🎨 Running generate-flux-images.js..."
+          node scripts/generate-flux-images.js
+
+          # Run generate-meta-config.js
+          echo "📝 Running generate-meta-config.js..."
+          node scripts/generate-meta-config.js
+          
+          echo "✅ All configuration scripts completed"
+
       - name: Build Remix SPA for Cloudflare Pages
         run: |
           DENO_URL="${{ needs.deploy-deno.outputs.url }}"
@@ -462,33 +516,6 @@ jobs:
           echo "✅ SPA build completed"
 
       # Removed: Setup Cloudflare Pages Functions (not needed for SPA)
-
-      - name: Generate Cloudflare Pages project name
-        id: cloudflare_project_name
-        run: |
-          # Extract repository name from GitHub context
-          REPO_NAME="${{ github.event.repository.name }}"
-          
-          # Truncate repo name to 26 chars to leave room for random ID
-          TRUNCATED_REPO=$(echo "$REPO_NAME" | cut -c1-26)
-          
-          # Generate random alphanumeric string (4 chars)
-          RANDOM_ID=$(openssl rand -hex 2)
-          
-          # Create unique project name with format: {truncated-repo-name}-{random}
-          PROJECT_NAME="${TRUNCATED_REPO}-${RANDOM_ID}"
-          
-          # Ensure project name is valid (lowercase, alphanumeric with hyphens, max 63 chars)
-          PROJECT_NAME=$(echo "$PROJECT_NAME" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9-]+/-/g')
-          # Remove any leading or trailing hyphens
-          PROJECT_NAME=$(echo "$PROJECT_NAME" | sed -E 's/^-+|-+$//g' | cut -c1-63)
-          
-          echo "📁 Repository name: '$REPO_NAME'"
-          echo "✂️  Truncated repo name: '$TRUNCATED_REPO'"
-          echo "🎲 Random ID: '$RANDOM_ID'"
-          echo "🚀 Generated project name: '$PROJECT_NAME' (${#PROJECT_NAME} chars)"
-          echo "cloudflare_project_name=$PROJECT_NAME" >> $GITHUB_OUTPUT
-          echo "PROJECT_SLUG=$PROJECT_NAME" >> "$GITHUB_ENV"
 
       - name: Create Cloudflare Pages project with cleanup
         env:
@@ -709,7 +736,17 @@ jobs:
         with:
           github-token: ${{ secrets.ADMIN_TOKEN }}
           script: |
-            const deploymentUrl = '${{ steps.cloudflare-deploy.outputs.url }}';
+            let deploymentUrl = '${{ steps.cloudflare-deploy.outputs.url }}';
+            
+            // Remove the random string prefix from Cloudflare Pages URL
+            // Format: https://{random}.{project-name}.pages.dev -> https://{project-name}.pages.dev
+            if (deploymentUrl && deploymentUrl.includes('.pages.dev')) {
+              const urlParts = deploymentUrl.split('.');
+              if (urlParts.length >= 4) {
+                // Remove the random subdomain, keep the project name subdomain
+                deploymentUrl = `https://${urlParts[1]}.pages.dev`;
+              }
+            }
             
             if (deploymentUrl && deploymentUrl !== '') {
               try {
