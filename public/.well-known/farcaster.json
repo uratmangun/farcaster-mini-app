@@ -1,17 +1,17 @@
 {
   "accountAssociation": {
-    "header": "eyJmaWQiOjMzNDg0MSwidHlwZSI6ImN1c3RvZHkiLCJrZXkiOiIweDI4MWYzMDkzN2NjZDU3ZTFiZTEyNGE4N2ZmZDU1OTA4YmM5NDljNTMifQ==",
-    "payload": "eyJkb21haW4iOiJodHRwczovLzRkYWRmMDA3ZjgwMi5uZ3Jvay5hcHAifQ==",
-    "signature": "MHhhNzQ3MjAxYTQ5MTRiMTVlMDRlNjJiYzZkOWFhYjU4OWJhMWNiM2MzZWU2MTgzNzA2MWRjYTdjOTk4ZWRlMjY0YTc0NzIwMWE0OTE0YjE1ZTA0ZTYyYmM2ZDlhYWI1ODk="
+    "header": "eyJmaWQiOjMzNDg0MSwidHlwZSI6ImN1c3RvZHkiLCJrZXkiOiIweGNiMWJhNWVkZDcwNzc1YmI0M2Q4ZWExMzIzY2U4YTE4ODA0MjVkYjE0NWNhNDUzYTY3MDM2OGQxYmVhZGZhMzYifQ==",
+    "payload": "eyJkb21haW4iOiJkODBjMzFkZjQ2ZTUubmdyb2suYXBwIn0=",
+    "signature": "cjMyr80birtyIZeDhQZoYfnBCMrUegkxv16XB1d0WZPoLrGjeBZbDVVMj/g3aTSB35NvLlEsbzhFdI52hQncBA=="
   },
   "miniapp": {
     "version": "1",
     "name": "Farcaster Mini App",
-    "iconUrl": "https://4dadf007f802.ngrok.app/images/flux-icon-2025-08-17T00-31-11-140Z.png",
-    "homeUrl": "https://4dadf007f802.ngrok.app",
-    "imageUrl": "https://4dadf007f802.ngrok.app/images/flux-embed-2025-08-17T00-31-15-719Z.png",
+    "iconUrl": "https://d80c31df46e5.ngrok.app/images/flux-icon-2025-08-17T06-44-53-003Z.png",
+    "homeUrl": "https://d80c31df46e5.ngrok.app",
+    "imageUrl": "https://d80c31df46e5.ngrok.app/images/flux-embed-2025-08-17T06-45-06-151Z.png",
     "buttonTitle": "Launch App",
-    "splashImageUrl": "https://4dadf007f802.ngrok.app/images/flux-splash-2025-08-17T00-31-28-373Z.png",
+    "splashImageUrl": "https://d80c31df46e5.ngrok.app/images/flux-splash-2025-08-17T06-45-16-598Z.png",
     "splashBackgroundColor": "#0ea5e9"
   }
 }

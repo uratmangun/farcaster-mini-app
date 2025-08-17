@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -7,9 +8,31 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Load environment variables
+const envPath = path.join(__dirname, '../.env');
+dotenv.config({ path: envPath });
+
 // Read the farcaster.json config
 const configPath = path.join(__dirname, '../public/.well-known/farcaster.json');
 const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+
+// Get current domain from environment (remove https:// if present)
+const currentDomain = process.env.FARCASTER_DOMAIN?.replace(/^https?:\/\//, '') || 
+                     config.miniapp.homeUrl?.replace(/^https?:\/\//, '');
+
+// Update homeUrl to match current domain if needed
+const correctHomeUrl = `https://${currentDomain}`;
+let homeUrlUpdated = false;
+
+if (config.miniapp.homeUrl !== correctHomeUrl) {
+  console.log(`🔄 Updating homeUrl: ${config.miniapp.homeUrl} → ${correctHomeUrl}`);
+  config.miniapp.homeUrl = correctHomeUrl;
+  homeUrlUpdated = true;
+  
+  // Save the updated config back to farcaster.json
+  fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+  console.log('✅ Updated farcaster.json with correct homeUrl');
+}
 
 // Generate the metadata configuration
 const metaConfig = {

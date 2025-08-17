@@ -6,14 +6,14 @@ export const META_CONFIG = {
   "description": "Welcome to Remix!",
   "farcasterMiniapp": {
     "version": "1",
-    "imageUrl": "https://4dadf007f802.ngrok.app/images/flux-embed-2025-08-17T00-31-15-719Z.png",
+    "imageUrl": "https://d80c31df46e5.ngrok.app/images/flux-embed-2025-08-17T06-45-06-151Z.png",
     "button": {
       "title": "Launch App",
       "action": {
         "type": "launch_miniapp",
         "name": "Farcaster Mini App",
-        "url": "https://4dadf007f802.ngrok.app",
-        "splashImageUrl": "https://4dadf007f802.ngrok.app/images/flux-splash-2025-08-17T00-31-28-373Z.png",
+        "url": "https://d80c31df46e5.ngrok.app",
+        "splashImageUrl": "https://d80c31df46e5.ngrok.app/images/flux-splash-2025-08-17T06-45-16-598Z.png",
         "splashBackgroundColor": "#0ea5e9"
       }
     }
@@ -21,11 +21,11 @@ export const META_CONFIG = {
   "config": {
     "version": "1",
     "name": "Farcaster Mini App",
-    "iconUrl": "https://4dadf007f802.ngrok.app/images/flux-icon-2025-08-17T00-31-11-140Z.png",
-    "homeUrl": "https://4dadf007f802.ngrok.app",
-    "imageUrl": "https://4dadf007f802.ngrok.app/images/flux-embed-2025-08-17T00-31-15-719Z.png",
+    "iconUrl": "https://d80c31df46e5.ngrok.app/images/flux-icon-2025-08-17T06-44-53-003Z.png",
+    "homeUrl": "https://d80c31df46e5.ngrok.app",
+    "imageUrl": "https://d80c31df46e5.ngrok.app/images/flux-embed-2025-08-17T06-45-06-151Z.png",
     "buttonTitle": "Launch App",
-    "splashImageUrl": "https://4dadf007f802.ngrok.app/images/flux-splash-2025-08-17T00-31-28-373Z.png",
+    "splashImageUrl": "https://d80c31df46e5.ngrok.app/images/flux-splash-2025-08-17T06-45-16-598Z.png",
     "splashBackgroundColor": "#0ea5e9"
   }
 } as const;

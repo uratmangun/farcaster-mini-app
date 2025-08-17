@@ -7,18 +7,24 @@ import {
 } from "@remix-run/react";
 import type { LinksFunction, MetaFunction } from "@remix-run/node";
 import { FarcasterSDK } from "./components/FarcasterSDK";
+import { META_CONFIG } from "~/meta-config";
 
 import "./tailwind.css";
 
-export const meta: MetaFunction = () => [
-  { title: "Farcaster Mini App" },
-  { name: "description", content: "A Farcaster Mini App built with Remix" },
-  { property: "fc:frame", content: "vNext" },
-  { property: "fc:frame:image", content: "https://your-domain.com/logo-light.png" },
-  { property: "fc:frame:button:1", content: "Launch App" },
-  { property: "fc:frame:button:1:action", content: "link" },
-  { property: "fc:frame:button:1:target", content: "https://your-domain.com" },
-];
+export const meta: MetaFunction = () => {
+  const metaTags = [
+    { title: META_CONFIG.title },
+    { name: "description", content: META_CONFIG.description },
+  ];
+
+  // Add Farcaster miniapp metadata
+  metaTags.push({
+    name: "fc:miniapp",
+    content: JSON.stringify(META_CONFIG.farcasterMiniapp)
+  });
+
+  return metaTags;
+};
 
 export const links: LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
