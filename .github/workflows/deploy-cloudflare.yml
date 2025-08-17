@@ -75,18 +75,24 @@ jobs:
           # Extract repository name from GitHub context
           REPO_NAME="${{ github.event.repository.name }}"
           
-          # Generate random alphanumeric string (8 chars)
-          RANDOM_ID=$(openssl rand -hex 4)
+          # Generate random alphanumeric string (6 chars to avoid 8/12 char restriction)
+          RANDOM_ID=$(openssl rand -hex 3)
           
-          # Create unique project name with format: {repo-name}-{random}
-          PROJECT_NAME="${REPO_NAME}-${RANDOM_ID}"
+          # Truncate repo name to ensure total length <= 26 chars
+          # Format: {truncated-repo-name}-{6-char-random}
+          # Max repo name length: 26 - 1 (hyphen) - 6 (random) = 19 chars
+          TRUNCATED_REPO=$(echo "$REPO_NAME" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9-]+/-/g' | sed -E 's/^-+|-+$//g' | cut -c1-19)
           
-          # Ensure project name is valid (lowercase, alphanumeric with hyphens, max 63 chars)
-          PROJECT_NAME=$(echo "$PROJECT_NAME" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9-]+/-/g' | sed -E 's/^-+|-+$//g' | cut -c1-63)
+          # Create project name
+          PROJECT_NAME="${TRUNCATED_REPO}-${RANDOM_ID}"
+          
+          # Final validation: ensure length <= 26 and doesn't start/end with hyphen
+          PROJECT_NAME=$(echo "$PROJECT_NAME" | sed -E 's/^-+|-+$//g' | cut -c1-26)
 
           echo "📁 Repository name: '$REPO_NAME'"
+          echo "✂️  Truncated repo name: '$TRUNCATED_REPO'"
           echo "🎲 Random ID: '$RANDOM_ID'"
-          echo "🚀 Generated unique project name: '$PROJECT_NAME'"
+          echo "🚀 Generated project name: '$PROJECT_NAME' (${#PROJECT_NAME} chars)"
           echo "deno_project_name=$PROJECT_NAME" >> $GITHUB_OUTPUT
 
       - name: Install Deno Deploy CLI
