@@ -733,7 +733,7 @@ jobs:
           find deploy -type f | head -20
           
           echo "🚀 Deploying SSR project '${PROJECT_SLUG}' with Cloudflare Pages Functions..."
-          DEPLOY_OUT=$(pnpm dlx wrangler pages deploy deploy --project-name "${PROJECT_SLUG}" --compatibility-date=2024-01-01 2>&1) || {
+          DEPLOY_OUT=$(pnpm dlx wrangler pages deploy deploy --project-name "${PROJECT_SLUG}" 2>&1) || {
             echo "$DEPLOY_OUT"
             exit 1
           }
