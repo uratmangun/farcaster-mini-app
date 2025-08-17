@@ -151,7 +151,6 @@ jobs:
           if [ $PROJECT_LIST_EXIT_CODE -ne 0 ]; then
             echo "⚠️ Warning: Failed to list projects (exit code: $PROJECT_LIST_EXIT_CODE)"
             echo "📝 Output: $PROJECT_LIST_OUTPUT"
-            echo "⚠️ Proceeding without cleanup..."
           else
             echo "✅ Successfully retrieved project list"
             
@@ -499,18 +498,24 @@ jobs:
           # Extract repository name from GitHub context
           REPO_NAME="${{ github.event.repository.name }}"
           
-          # Generate random alphanumeric string (8 chars)
-          RANDOM_ID=$(openssl rand -hex 4)
+          # Truncate repo name to 26 chars to leave room for random ID
+          TRUNCATED_REPO=$(echo "$REPO_NAME" | cut -c1-26)
           
-          # Create unique project name with format: {repo-name}-{random}
-          PROJECT_NAME="${REPO_NAME}-${RANDOM_ID}"
+          # Generate random alphanumeric string (4 chars)
+          RANDOM_ID=$(openssl rand -hex 2)
+          
+          # Create unique project name with format: {truncated-repo-name}-{random}
+          PROJECT_NAME="${TRUNCATED_REPO}-${RANDOM_ID}"
           
           # Ensure project name is valid (lowercase, alphanumeric with hyphens, max 63 chars)
-          PROJECT_NAME=$(echo "$PROJECT_NAME" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9-]+/-/g' | sed -E 's/^-+|-+$//g' | cut -c1-63)
+          PROJECT_NAME=$(echo "$PROJECT_NAME" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9-]+/-/g')
+          # Remove any leading or trailing hyphens
+          PROJECT_NAME=$(echo "$PROJECT_NAME" | sed -E 's/^-+|-+$//g' | cut -c1-63)
           
           echo "📁 Repository name: '$REPO_NAME'"
+          echo "✂️  Truncated repo name: '$TRUNCATED_REPO'"
           echo "🎲 Random ID: '$RANDOM_ID'"
-          echo "🚀 Generated unique project name: '$PROJECT_NAME'"
+          echo "🚀 Generated project name: '$PROJECT_NAME' (${#PROJECT_NAME} chars)"
           echo "cloudflare_project_name=$PROJECT_NAME" >> $GITHUB_OUTPUT
           echo "PROJECT_SLUG=$PROJECT_NAME" >> "$GITHUB_ENV"
 
@@ -528,14 +533,17 @@ jobs:
           PROJECT_NAME="${{ steps.cloudflare_project_name.outputs.cloudflare_project_name }}"
           REPO_NAME="${{ github.event.repository.name }}"
           echo "🔍 Preparing Cloudflare Pages project: ${PROJECT_NAME}"
-          echo "📁 Repository name prefix: ${REPO_NAME}"
           
-          # Cleanup phase: Delete all existing projects with the same repository name prefix
+          # Extract base name from PROJECT_NAME (remove the last 5 characters which is the random ID)
+          PROJECT_BASE="${PROJECT_NAME%-*}"
+          echo "📁 Project base name for cleanup: ${PROJECT_BASE}"
+          
+          # Cleanup phase: Delete all existing projects with the same base name prefix
           echo ""
           echo "════════════════════════════════════════════════════════"
           echo "🧹 CLEANUP PHASE: Removing old Cloudflare Pages projects"
           echo "════════════════════════════════════════════════════════"
-          echo "🔍 Looking for projects with prefix: ${REPO_NAME}-"
+          echo "🔍 Looking for projects with prefix: ${PROJECT_BASE}-"
           echo ""
           
           # Get list of all projects
