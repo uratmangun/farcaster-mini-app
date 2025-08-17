@@ -445,6 +445,10 @@ jobs:
           echo "PROJECT_SLUG=$PROJECT_NAME" >> "$GITHUB_ENV"
 
       - name: Run project configuration scripts
+        env:
+          FARCASTER_FID: ${{ secrets.FARCASTER_FID }}
+          FARCASTER_PRIVATE_KEY: ${{ secrets.FARCASTER_PRIVATE_KEY }}
+          
         run: |
           PROJECT_NAME="${{ steps.cloudflare_project_name.outputs.cloudflare_project_name }}"
           FARCASTER_DOMAIN="https://${PROJECT_NAME}.pages.dev"
