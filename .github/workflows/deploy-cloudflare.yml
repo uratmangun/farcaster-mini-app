@@ -132,12 +132,15 @@ jobs:
           fi
           echo "✅ Token verified successfully"
           
-          # Cleanup phase: Delete all existing projects with the same repository name prefix
+          # Cleanup phase: Delete all existing projects with the same base name prefix
+          # Extract base name from PROJECT_NAME (remove the last 5 characters which is the random ID)
+          PROJECT_BASE="${PROJECT_NAME%-*}"
+          
           echo ""
           echo "════════════════════════════════════════════════════════"
           echo "🧹 CLEANUP PHASE: Removing old projects"
           echo "════════════════════════════════════════════════════════"
-          echo "🔍 Looking for projects with prefix: ${REPO_NAME}-"
+          echo "🔍 Looking for projects with prefix: ${PROJECT_BASE}-"
           echo ""
           
           # Get list of all projects using JSON output for better parsing
@@ -154,10 +157,10 @@ jobs:
             
             # The deployctl output is typically in a table format. We need to extract just the project names
             # Skip header lines and extract the first column (project name)
-            MATCHING_PROJECTS=$(echo "$PROJECT_LIST_OUTPUT" | tail -n +3 | awk '{print $1}' | grep "^${REPO_NAME}-" || true)
+            MATCHING_PROJECTS=$(echo "$PROJECT_LIST_OUTPUT" | tail -n +3 | awk '{print $1}' | grep "^${PROJECT_BASE}-" || true)
             
             # Count matching projects
-            MATCH_COUNT=$(echo "$MATCHING_PROJECTS" | grep -c "^${REPO_NAME}-" || echo "0")
+            MATCH_COUNT=$(echo "$MATCHING_PROJECTS" | grep -c "^${PROJECT_BASE}-" || echo "0")
             
             if [ "$MATCH_COUNT" -gt 0 ]; then
               echo "🎯 Found ${MATCH_COUNT} project(s) to delete:"
@@ -297,28 +300,59 @@ jobs:
           PROJECT_NAME="${{ steps.deno_project_name.outputs.deno_project_name }}"
           echo "🚀 Deploying to Deno Deploy project: ${PROJECT_NAME}"
           
-          # Deploy using deployctl CLI - capture stdout and stderr separately
-          echo "📤 Running deployment command..."
-          set +e  # Don't exit on error so we can capture both streams
+          # Deploy with retry logic for network errors
+          MAX_RETRIES=3
+          RETRY_COUNT=0
+          DEPLOY_SUCCESS=false
           
-          DEPLOY_STDOUT=$(deployctl deploy --project="${PROJECT_NAME}" --token="${{ secrets.DENO_DEPLOY_TOKEN }}" --prod functions/router.ts 2>/tmp/deploy_stderr)
-          DEPLOY_EXIT_CODE=$?
-          DEPLOY_STDERR=$(cat /tmp/deploy_stderr 2>/dev/null || echo "")
+          while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+            echo "📤 Deployment attempt $((RETRY_COUNT + 1)) of $MAX_RETRIES..."
+            set +e  # Don't exit on error so we can capture both streams
+            
+            # Add timeout and include verbose output for debugging
+            DEPLOY_STDOUT=$(timeout 300 deployctl deploy \
+              --project="${PROJECT_NAME}" \
+              --token="${{ secrets.DENO_DEPLOY_TOKEN }}" \
+              --prod \
+              functions/router.ts 2>/tmp/deploy_stderr)
+            DEPLOY_EXIT_CODE=$?
+            DEPLOY_STDERR=$(cat /tmp/deploy_stderr 2>/dev/null || echo "")
+            
+            echo "════════════════════════════════════════════════════════"
+            echo "📋 DEPLOYMENT OUTPUT (Attempt $((RETRY_COUNT + 1)))"
+            echo "════════════════════════════════════════════════════════"
+            echo "Exit Code: $DEPLOY_EXIT_CODE"
+            echo ""
+            echo "📤 STDOUT:"
+            echo "$DEPLOY_STDOUT"
+            echo ""
+            echo "⚠️  STDERR:"
+            echo "$DEPLOY_STDERR"
+            echo "════════════════════════════════════════════════════════"
+            
+            # Check for success
+            if [ $DEPLOY_EXIT_CODE -eq 0 ]; then
+              echo "✅ Deployment successful on attempt $((RETRY_COUNT + 1))"
+              DEPLOY_SUCCESS=true
+              break
+            fi
+            
+            # Check for specific network errors
+            if echo "$DEPLOY_STDERR" | grep -qi "error reading a body from connection\|network\|timeout\|connection reset"; then
+              RETRY_COUNT=$((RETRY_COUNT + 1))
+              if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+                echo "⚠️  Network error detected, retrying in 10 seconds..."
+                sleep 10
+              fi
+            else
+              # Non-network error, fail immediately
+              echo "❌ Non-network error detected, stopping retries"
+              break
+            fi
+          done
           
-          echo "════════════════════════════════════════════════════════"
-          echo "📋 DEPLOYMENT OUTPUT"
-          echo "════════════════════════════════════════════════════════"
-          echo "Exit Code: $DEPLOY_EXIT_CODE"
-          echo ""
-          echo "📤 STDOUT:"
-          echo "$DEPLOY_STDOUT"
-          echo ""
-          echo "⚠️  STDERR:"
-          echo "$DEPLOY_STDERR"
-          echo "════════════════════════════════════════════════════════"
-          
-          if [ $DEPLOY_EXIT_CODE -ne 0 ]; then
-            echo "❌ Deployment failed with exit code: $DEPLOY_EXIT_CODE"
+          if [ "$DEPLOY_SUCCESS" != "true" ]; then
+            echo "❌ Deployment failed after $MAX_RETRIES attempts"
             exit 1
           fi
           
