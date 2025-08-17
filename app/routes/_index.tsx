@@ -9,7 +9,7 @@ export const meta: MetaFunction = () => {
     { name: "description", content: META_CONFIG.description },
   ];
 
-  // Add Farcaster miniapp metadata
+  // Add Fardata
   metaTags.push({
     name: "fc:miniapp",
     content: JSON.stringify(META_CONFIG.farcasterMiniapp)
@@ -25,7 +25,7 @@ export default function Index() {
   const [copied, setCopied] = useState(false);
   const [apiResults, setApiResults] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState<Record<string, boolean>>({});
-  const ghCommand = `gh repo create my-remix-app --template uratmangun/remix-deno --public --clone\ncd my-remix-app\npnpm install`;
+  const ghCommand = `gh repo create my-farcaster-app --template uratmangun/farcaster-mini-app --public --clone`;
 
   const callFunction = async (functionName: string, endpoint: string) => {
     setLoading(prev => ({ ...prev, [functionName]: true }));
