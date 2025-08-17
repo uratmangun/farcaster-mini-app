@@ -417,7 +417,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build Remix SSR for Cloudflare Pages
+      - name: Build Remix SPA for Cloudflare Pages
         run: |
           DENO_URL="${{ needs.deploy-deno.outputs.url }}"
           echo "🔗 Received Deno Deploy URL: ${DENO_URL}"
@@ -425,7 +425,7 @@ jobs:
           # Verify we have a valid URL - fail if not
           if [ -z "${DENO_URL}" ] || [ "${DENO_URL}" = "" ]; then
             echo "❌ ERROR: No Deno Deploy URL received from previous job"
-            echo "❌ The Deno deployment must complete successfully before building the Remix SSR app"
+            echo "❌ The Deno deployment must complete successfully before building the Remix SPA"
             echo "💡 Check the 'deploy-deno' job logs for deployment issues"
             exit 1
           fi
@@ -433,7 +433,7 @@ jobs:
           # Export the environment variable for Vite
           export VITE_API_BASE_URL="${DENO_URL}"
           
-          echo "📦 Building SSR app with environment:"
+          echo "📦 Building SPA with environment:"
           echo "   VITE_API_BASE_URL=${VITE_API_BASE_URL}"
           
           # Create .env.production file for Vite
@@ -441,24 +441,16 @@ jobs:
           echo "📝 Created .env.production with API URL"
           cat .env.production
           
-          # Build the SSR application for Cloudflare Pages
-          echo "🔨 Starting SSR build for Cloudflare Pages..."
+          # Build the SPA for Cloudflare Pages
+          echo "🔨 Starting SPA build for Cloudflare Pages..."
           VITE_API_BASE_URL="${VITE_API_BASE_URL}" pnpm build
           
           # Verify the build output
-          echo "🔍 Verifying SSR build output..."
+          echo "🔍 Verifying SPA build output..."
           echo "📂 Build structure:"
           ls -la build/ || echo "No build directory found"
           
-          # Check for Cloudflare Pages Functions
-          if [ -d "build/server" ]; then
-            echo "✅ Server build found for SSR"
-            ls -la build/server/ || true
-          else
-            echo "⚠️ Warning: No server build found"
-          fi
-          
-          # Check for client build
+          # Check for client build (SPA only needs client)
           if [ -d "build/client" ]; then
             echo "✅ Client build found"
             ls -la build/client/ || true
@@ -467,34 +459,9 @@ jobs:
             exit 1
           fi
           
-          echo "✅ SSR build completed"
+          echo "✅ SPA build completed"
 
-      - name: Setup Cloudflare Pages Functions
-        run: |
-          # Create temporary functions directory for SSR middleware
-          mkdir -p cf-functions
-          
-          # Create a Cloudflare Pages Function to handle SSR
-          cat > cf-functions/_middleware.js << 'EOF'
-          import { createPagesFunctionHandler } from "@remix-run/cloudflare-pages";
-          
-          // Import the server build - path is relative to functions directory in deployment
-          import * as build from "../build/server/index.js";
-          
-          const handleRequest = createPagesFunctionHandler({
-            build,
-            mode: "production",
-            getLoadContext: (context) => ({
-              env: context.env,
-              cf: context.cf,
-              ctx: context.ctx,
-            }),
-          });
-          
-          export const onRequest = handleRequest;
-          EOF
-          
-          echo "✅ Created Cloudflare Pages Functions middleware for SSR"
+      # Removed: Setup Cloudflare Pages Functions (not needed for SPA)
 
       - name: Generate Cloudflare Pages project name
         id: cloudflare_project_name
@@ -699,7 +666,7 @@ jobs:
           echo "✅ PROJECT SETUP COMPLETE"
           echo "════════════════════════════════════════════════════════"
 
-      - name: Deploy SSR to Cloudflare Pages (wrangler v3 deploy)
+      - name: Deploy SPA to Cloudflare Pages (wrangler v3 deploy)
         id: cloudflare-deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -707,59 +674,31 @@ jobs:
           set -e
           echo "Wrangler version:"; pnpm dlx wrangler --version
           
-          # Prepare deployment directory structure for SSR
-          echo "📦 Preparing SSR deployment structure..."
+          # For SPA deployment, we only need the client build
+          echo "📦 Preparing SPA deployment..."
           
-          # Create deployment directory
-          mkdir -p deploy
-          
-          # Copy client build (static assets)
-          if [ -d "build/client" ]; then
-            cp -r build/client/* deploy/
-            echo "✅ Copied client assets to deployment directory"
-          else
+          # Verify client build exists
+          if [ ! -d "build/client" ]; then
             echo "❌ Error: Client build not found"
             exit 1
           fi
           
-          # Copy Cloudflare Pages Functions (SSR middleware)
-          if [ -d "cf-functions" ]; then
-            cp -r cf-functions deploy/functions
-            echo "✅ Copied Cloudflare Pages Functions for SSR"
-          else
-            echo "❌ Error: Cloudflare Pages Functions not found"
-            exit 1
-          fi
+          echo "📂 Deployment files:"
+          ls -la build/client/ | head -20
           
-          # Copy server build to deployment directory for import by functions
-          if [ -d "build/server" ]; then
-            mkdir -p deploy/build/server
-            cp -r build/server/* deploy/build/server/
-            echo "✅ Copied server build for SSR functions"
-          else
-            echo "❌ Error: Server build not found for SSR"
-            exit 1
-          fi
-          
-          echo "📂 Final deployment structure:"
-          find deploy -type f | head -20
-          
-          echo "🚀 Deploying SSR project '${PROJECT_SLUG}' with Cloudflare Pages Functions..."
-          # Deploy from the current directory, specifying deploy as the static directory
-          # This ensures wrangler finds the functions in deploy/functions/
-          cd deploy
-          DEPLOY_OUT=$(pnpm dlx wrangler pages deploy . --project-name "${PROJECT_SLUG}" 2>&1) || {
+          echo "🚀 Deploying SPA project '${PROJECT_SLUG}' to Cloudflare Pages..."
+          # Deploy the client build directory directly
+          DEPLOY_OUT=$(pnpm dlx wrangler pages deploy build/client --project-name "${PROJECT_SLUG}" 2>&1) || {
             echo "$DEPLOY_OUT"
             exit 1
           }
           echo "$DEPLOY_OUT"
-          cd ..
           
           # Extract first pages.dev URL from output
           URL=$(echo "$DEPLOY_OUT" | grep -Eo 'https?://[^ ]+\.pages\.dev[^ ]*' | head -n1)
           if [ -n "$URL" ]; then
             echo "url=$URL" >> "$GITHUB_OUTPUT"
-            echo "✅ SSR Deployment URL: $URL"
+            echo "✅ SPA Deployment URL: $URL"
           else
             echo "⚠️ Warning: No deployment URL found in wrangler output" >&2
           fi
@@ -778,7 +717,7 @@ jobs:
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   homepage: deploymentUrl,
-                  description: 'Remix SPA – Cloudflare Pages static deployment'
+                  description: 'Remix SPA – Cloudflare Pages deployment'
                 });
                 
                 console.log(`✅ Repository homepage updated to: ${deploymentUrl}`);

@@ -11,8 +11,7 @@ declare module "@remix-run/cloudflare" {
 export default defineConfig({
   plugins: [
     remix({
-      ssr: true,
-      serverModuleFormat: "esm",
+      ssr: false,
       future: {
         v3_fetcherPersist: true,
         v3_relativeSplatPath: true,

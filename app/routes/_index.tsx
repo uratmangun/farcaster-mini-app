@@ -1,93 +1,27 @@
-import type { MetaFunction, LoaderFunctionArgs } from "@remix-run/cloudflare";
+import type { MetaFunction } from "@remix-run/cloudflare";
 import { useState } from "react";
-import { useLoaderData } from "@remix-run/react";
 import ky from "ky";
+import { META_CONFIG } from "~/meta-config";
 
-interface FarcasterConfig {
-  miniapp: {
-    version: string;
-    name: string;
-    iconUrl: string;
-    homeUrl: string;
-    imageUrl: string;
-    buttonTitle: string;
-    splashImageUrl: string;
-    splashBackgroundColor: string;
-  };
-}
-
-export async function loader({ request, context }: LoaderFunctionArgs) {
-  try {
-    // In Cloudflare Pages, we need to fetch the config from the deployed static assets
-    const url = new URL(request.url);
-    const configUrl = `${url.origin}/.well-known/farcaster.json`;
-    const response = await fetch(configUrl);
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch config: ${response.status}`);
-    }
-    
-    const config: FarcasterConfig = await response.json();
-    
-    return {
-      title: config.miniapp.name,
-      homeUrl: config.miniapp.homeUrl,
-      config: config.miniapp
-    };
-  } catch (error) {
-    console.error("Failed to load Farcaster config:", error);
-    // Fallback values
-    return {
-      title: "New Remix App",
-      homeUrl: "http://localhost:3000",
-      config: {
-        version: "1",
-        name: "New Remix App",
-        iconUrl: "",
-        homeUrl: "http://localhost:3000",
-        imageUrl: "",
-        buttonTitle: "Launch App",
-        splashImageUrl: "",
-        splashBackgroundColor: "#0ea5e9"
-      }
-    };
-  }
-}
-
-export const meta: MetaFunction<typeof loader> = ({ data }) => {
-  const title = data?.title || "New Remix App";
-  const config = data?.config;
-  
+export const meta: MetaFunction = () => {
   const metaTags = [
-    { title },
-    { name: "description", content: "Welcome to Remix!" },
+    { title: META_CONFIG.title },
+    { name: "description", content: META_CONFIG.description },
   ];
 
-  if (config) {
-    metaTags.push({
-      name: "fc:miniapp",
-      content: JSON.stringify({
-        version: config.version,
-        imageUrl: config.imageUrl,
-        button: {
-          title: config.buttonTitle,
-          action: {
-            type: "launch_miniapp",
-            name: config.name,
-            url: config.homeUrl,
-            splashImageUrl: config.splashImageUrl,
-            splashBackgroundColor: config.splashBackgroundColor
-          }
-        }
-      })
-    });
-  }
+  // Add Farcaster miniapp metadata
+  metaTags.push({
+    name: "fc:miniapp",
+    content: JSON.stringify(META_CONFIG.farcasterMiniapp)
+  });
 
   return metaTags;
 };
 
 export default function Index() {
-  const { title, homeUrl, config } = useLoaderData<typeof loader>();
+  const { title, homeUrl, config } = META_CONFIG.config ? 
+    { title: META_CONFIG.title, homeUrl: META_CONFIG.config.homeUrl, config: META_CONFIG.config } : 
+    { title: "New Remix App", homeUrl: "http://localhost:3000", config: null };
   const [copied, setCopied] = useState(false);
   const [apiResults, setApiResults] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState<Record<string, boolean>>({});

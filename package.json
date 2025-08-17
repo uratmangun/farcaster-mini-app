@@ -4,9 +4,10 @@
   "sideEffects": false,
   "type": "module",
   "scripts": {
-    "build": "remix vite:build",
+    "prebuild": "node scripts/generate-meta-config.js",
+    "build": "pnpm prebuild && remix vite:build",
     "dev": "concurrently \"pnpm dev:remix\" \"pnpm dev:functions\" --names \"remix,functions\" --prefix-colors \"cyan,magenta\"",
-    "dev:remix": "remix vite:dev",
+    "dev:remix": "node scripts/generate-meta-config.js && remix vite:dev",
     "dev:functions": "deno run --allow-net --allow-env --allow-read --watch functions/router.ts",
     "functions:router": "deno run --allow-net --allow-env --allow-read --watch functions/router.ts",
     "functions:api": "deno run --allow-net --allow-env --watch functions/api.ts",
@@ -14,7 +15,7 @@
     "lint:deno": "deno lint functions/",
     "fmt:deno": "deno fmt functions/",
     "check:deno": "deno check functions/*.ts",
-    "start": "remix-serve ./build/server/index.js",
+    "preview": "npx serve build/client",
     "typecheck": "tsc"
   },
   "dependencies": {
