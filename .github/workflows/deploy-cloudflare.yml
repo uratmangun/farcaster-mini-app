@@ -291,11 +291,25 @@ jobs:
           PROJECT_NAME="${{ steps.deno_project_name.outputs.deno_project_name }}"
           echo "🚀 Deploying to Deno Deploy project: ${PROJECT_NAME}"
           
-          # Deploy using deployctl CLI
-          DEPLOY_OUTPUT=$(deployctl deploy --project="${PROJECT_NAME}" --token="${{ secrets.DENO_DEPLOY_TOKEN }}" --prod functions/router.ts 2>&1)
-          DEPLOY_EXIT_CODE=$?
+          # Deploy using deployctl CLI - capture stdout and stderr separately
+          echo "📤 Running deployment command..."
+          set +e  # Don't exit on error so we can capture both streams
           
-          echo "$DEPLOY_OUTPUT"
+          DEPLOY_STDOUT=$(deployctl deploy --project="${PROJECT_NAME}" --token="${{ secrets.DENO_DEPLOY_TOKEN }}" --prod functions/router.ts 2>/tmp/deploy_stderr)
+          DEPLOY_EXIT_CODE=$?
+          DEPLOY_STDERR=$(cat /tmp/deploy_stderr 2>/dev/null || echo "")
+          
+          echo "════════════════════════════════════════════════════════"
+          echo "📋 DEPLOYMENT OUTPUT"
+          echo "════════════════════════════════════════════════════════"
+          echo "Exit Code: $DEPLOY_EXIT_CODE"
+          echo ""
+          echo "📤 STDOUT:"
+          echo "$DEPLOY_STDOUT"
+          echo ""
+          echo "⚠️  STDERR:"
+          echo "$DEPLOY_STDERR"
+          echo "════════════════════════════════════════════════════════"
           
           if [ $DEPLOY_EXIT_CODE -ne 0 ]; then
             echo "❌ Deployment failed with exit code: $DEPLOY_EXIT_CODE"
