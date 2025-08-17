@@ -477,13 +477,17 @@ jobs:
           # Create a Cloudflare Pages Function to handle SSR
           cat > cf-functions/_middleware.js << 'EOF'
           import { createPagesFunctionHandler } from "@remix-run/cloudflare-pages";
+          
+          // Import the server build - path is relative to functions directory in deployment
           import * as build from "../build/server/index.js";
           
           const handleRequest = createPagesFunctionHandler({
             build,
-            mode: process.env.NODE_ENV,
+            mode: "production",
             getLoadContext: (context) => ({
               env: context.env,
+              cf: context.cf,
+              ctx: context.ctx,
             }),
           });
           
@@ -741,11 +745,15 @@ jobs:
           find deploy -type f | head -20
           
           echo "🚀 Deploying SSR project '${PROJECT_SLUG}' with Cloudflare Pages Functions..."
-          DEPLOY_OUT=$(pnpm dlx wrangler pages deploy deploy --project-name "${PROJECT_SLUG}" 2>&1) || {
+          # Deploy from the current directory, specifying deploy as the static directory
+          # This ensures wrangler finds the functions in deploy/functions/
+          cd deploy
+          DEPLOY_OUT=$(pnpm dlx wrangler pages deploy . --project-name "${PROJECT_SLUG}" 2>&1) || {
             echo "$DEPLOY_OUT"
             exit 1
           }
           echo "$DEPLOY_OUT"
+          cd ..
           
           # Extract first pages.dev URL from output
           URL=$(echo "$DEPLOY_OUT" | grep -Eo 'https?://[^ ]+\.pages\.dev[^ ]*' | head -n1)
