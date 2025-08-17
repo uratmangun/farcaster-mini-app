@@ -1,15 +1,93 @@
-import type { MetaFunction } from "@remix-run/react";
+import type { MetaFunction, LoaderFunctionArgs } from "@remix-run/cloudflare";
 import { useState } from "react";
+import { useLoaderData } from "@remix-run/react";
 import ky from "ky";
 
-export const meta: MetaFunction = () => {
-  return [
-    { title: "New Remix App" },
+interface FarcasterConfig {
+  miniapp: {
+    version: string;
+    name: string;
+    iconUrl: string;
+    homeUrl: string;
+    imageUrl: string;
+    buttonTitle: string;
+    splashImageUrl: string;
+    splashBackgroundColor: string;
+  };
+}
+
+export async function loader({ request, context }: LoaderFunctionArgs) {
+  try {
+    // In Cloudflare Pages, we need to fetch the config from the deployed static assets
+    const url = new URL(request.url);
+    const configUrl = `${url.origin}/.well-known/farcaster.json`;
+    const response = await fetch(configUrl);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch config: ${response.status}`);
+    }
+    
+    const config: FarcasterConfig = await response.json();
+    
+    return {
+      title: config.miniapp.name,
+      homeUrl: config.miniapp.homeUrl,
+      config: config.miniapp
+    };
+  } catch (error) {
+    console.error("Failed to load Farcaster config:", error);
+    // Fallback values
+    return {
+      title: "New Remix App",
+      homeUrl: "http://localhost:3000",
+      config: {
+        version: "1",
+        name: "New Remix App",
+        iconUrl: "",
+        homeUrl: "http://localhost:3000",
+        imageUrl: "",
+        buttonTitle: "Launch App",
+        splashImageUrl: "",
+        splashBackgroundColor: "#0ea5e9"
+      }
+    };
+  }
+}
+
+export const meta: MetaFunction<typeof loader> = ({ data }) => {
+  const title = data?.title || "New Remix App";
+  const config = data?.config;
+  
+  const metaTags = [
+    { title },
     { name: "description", content: "Welcome to Remix!" },
   ];
+
+  if (config) {
+    metaTags.push({
+      name: "fc:miniapp",
+      content: JSON.stringify({
+        version: config.version,
+        imageUrl: config.imageUrl,
+        button: {
+          title: config.buttonTitle,
+          action: {
+            type: "launch_miniapp",
+            name: config.name,
+            url: config.homeUrl,
+            splashImageUrl: config.splashImageUrl,
+            splashBackgroundColor: config.splashBackgroundColor
+          }
+        }
+      })
+    });
+  }
+
+  return metaTags;
 };
 
 export default function Index() {
+  const { title, homeUrl, config } = useLoaderData<typeof loader>();
   const [copied, setCopied] = useState(false);
   const [apiResults, setApiResults] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState<Record<string, boolean>>({});
@@ -18,7 +96,7 @@ export default function Index() {
   const callFunction = async (functionName: string, endpoint: string) => {
     setLoading(prev => ({ ...prev, [functionName]: true }));
     try {
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || homeUrl || 'http://localhost:8000';
       const fullUrl = `${apiBaseUrl}${endpoint}`;
       const response = await ky.get(fullUrl).json();
       setApiResults(prev => ({ ...prev, [functionName]: response }));
@@ -37,7 +115,7 @@ export default function Index() {
       <div className="flex flex-col items-center gap-16">
         <header className="flex flex-col items-center gap-9">
           <h1 className="leading text-2xl font-bold text-gray-800 dark:text-gray-100">
-            Welcome to <span className="sr-only">Remix</span>
+            Welcome to <span className="sr-only">{title}</span>
           </h1>
           <div className="w-[684px] max-w-[90vw] rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-900">
             <div className="mb-3 flex items-center justify-between">
@@ -111,28 +189,6 @@ export default function Index() {
 
 const functionEndpoints = [
   {
-    name: "Hello World",
-    endpoint: "/hello",
-    description: "Simple greeting with timestamp and request info",
-    icon: (
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="24"
-        height="20"
-        viewBox="0 0 20 20"
-        fill="none"
-        className="stroke-gray-600 group-hover:stroke-current dark:stroke-gray-300"
-      >
-        <path
-          d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    ),
-  },
-  {
     name: "Users API",
     endpoint: "/api",
     description: "REST API with user data and pagination",
@@ -147,28 +203,6 @@ const functionEndpoints = [
       >
         <path
           d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    ),
-  },
-  {
-    name: "Time Service",
-    endpoint: "/time",
-    description: "Current time in multiple formats and timezones",
-    icon: (
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="24"
-        height="20"
-        viewBox="0 0 20 20"
-        fill="none"
-        className="stroke-gray-600 group-hover:stroke-current dark:stroke-gray-300"
-      >
-        <path
-          d="M10 6v6l4 2m6-2a10 10 0 11-20 0 10 10 0 0120 0z"
           strokeWidth="1.5"
           strokeLinecap="round"
           strokeLinejoin="round"

@@ -86,6 +86,8 @@
   "workspace": {
     "packageJson": {
       "dependencies": [
+        "npm:@farcaster/miniapp-sdk@~0.1.8",
+        "npm:@remix-run/cloudflare@^2.17.0",
         "npm:@remix-run/dev@*",
         "npm:@remix-run/node@*",
         "npm:@remix-run/react@*",
@@ -96,6 +98,7 @@
         "npm:@typescript-eslint/parser@^6.7.4",
         "npm:autoprefixer@^10.4.19",
         "npm:concurrently@^9.2.0",
+        "npm:dotenv@^17.2.1",
         "npm:eslint-import-resolver-typescript@^3.6.1",
         "npm:eslint-plugin-import@^2.28.1",
         "npm:eslint-plugin-jsx-a11y@^6.7.1",
@@ -108,6 +111,7 @@
         "npm:react-dom@^18.2.0",
         "npm:react@^18.2.0",
         "npm:tailwindcss@^3.4.4",
+        "npm:together-ai@0.22",
         "npm:typescript@^5.1.6",
         "npm:vite-tsconfig-paths@^4.2.1",
         "npm:vite@6"

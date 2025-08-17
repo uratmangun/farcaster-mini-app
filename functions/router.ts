@@ -4,9 +4,7 @@
  */
 
 // Static imports of all function handlers
-import helloHandler from "./hello.ts";
 import apiHandler from "./api.ts";
-import timeHandler from "./time.ts";
 
 export interface FunctionInfo {
   name: string;
@@ -36,9 +34,7 @@ class FunctionRouter {
     
     // Register each function handler
     const functionHandlers: Array<[string, (req: Request) => Response | Promise<Response>]> = [
-      ["hello", helloHandler],
       ["api", apiHandler],
-      ["time", timeHandler],
     ];
 
     for (const [name, handler] of functionHandlers) {
