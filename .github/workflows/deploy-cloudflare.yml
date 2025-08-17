@@ -448,6 +448,7 @@ jobs:
         env:
           FARCASTER_FID: ${{ secrets.FARCASTER_FID }}
           FARCASTER_PRIVATE_KEY: ${{ secrets.FARCASTER_PRIVATE_KEY }}
+          TOGETHER_API_KEY: ${{ secrets.TOGETHER_API_KEY }}
           
         run: |
           PROJECT_NAME="${{ steps.cloudflare_project_name.outputs.cloudflare_project_name }}"
